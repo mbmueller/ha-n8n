@@ -127,9 +127,18 @@ class N8nApiClient:
         json: dict[str, Any] | None = None,
         auth: bool = True,
     ) -> Any:
-        """Perform an HTTP request and map common error statuses."""
+        """Perform an HTTP request and map common error statuses.
+
+        Authenticated POST/PUT/PATCH calls always send a JSON body (at least
+        ``{}``) with ``Content-Type: application/json``. n8n rejects other
+        media types (e.g. aiohttp's default ``application/octet-stream`` on
+        empty POSTs) with HTTP 415 on routes that declare a JSON body.
+        """
         headers = self._headers() if auth else {"Accept": "application/json"}
-        if json is not None:
+        body = json
+        if body is None and auth and method.upper() in ("POST", "PUT", "PATCH"):
+            body = {}
+        if body is not None:
             headers = {**headers, "Content-Type": "application/json"}
 
         try:
@@ -137,7 +146,7 @@ class N8nApiClient:
                 method,
                 url,
                 headers=headers,
-                json=json,
+                json=body,
                 timeout=_REQUEST_TIMEOUT,
             ) as response:
                 if response.status in (401, 403):
@@ -204,9 +213,15 @@ class N8nApiClient:
         return workflow_from_api(payload)
 
     async def async_activate_workflow(self, workflow_id: str) -> Workflow:
-        """Activate (publish) a workflow."""
+        """Activate (publish) a workflow.
+
+        Sends ``{}`` as ``application/json`` — n8n's activate route declares an
+        optional JSON body and returns 415 for non-JSON Content-Types.
+        """
         payload = await self._request(
-            "POST", f"{self.api_root}/workflows/{workflow_id}/activate"
+            "POST",
+            f"{self.api_root}/workflows/{workflow_id}/activate",
+            json={},
         )
         if isinstance(payload, dict) and payload.get("id") is not None:
             return workflow_from_api(payload)
@@ -215,7 +230,9 @@ class N8nApiClient:
     async def async_deactivate_workflow(self, workflow_id: str) -> Workflow:
         """Deactivate (unpublish) a workflow."""
         payload = await self._request(
-            "POST", f"{self.api_root}/workflows/{workflow_id}/deactivate"
+            "POST",
+            f"{self.api_root}/workflows/{workflow_id}/deactivate",
+            json={},
         )
         if isinstance(payload, dict) and payload.get("id") is not None:
             return workflow_from_api(payload)

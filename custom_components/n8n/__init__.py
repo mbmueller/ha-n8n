@@ -42,6 +42,14 @@ SERVICE_DEACTIVATE = "deactivate_workflow"
 CONF_WEBHOOK_NOTIFIED = "webhook_notified"
 
 
+def trigger_body_from_service_data(service_data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the JSON body from a trigger service call (`data` or `payload`)."""
+    body = service_data.get("data")
+    if body is None:
+        body = service_data.get("payload")
+    return body if isinstance(body, dict) else None
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: N8nConfigEntry) -> bool:
     """Set up n8n from a config entry."""
     await _async_ensure_webhook_secrets(hass, entry)
@@ -179,7 +187,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             await client.async_trigger_workflow(
                 workflow_id,
                 webhook_path=call.data.get("webhook_path"),
-                data=call.data.get("data"),
+                data=trigger_body_from_service_data(dict(call.data)),
             )
         except N8nAuthError as err:
             raise HomeAssistantError(str(err)) from err
@@ -225,6 +233,7 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 vol.Optional("config_entry_id"): cv.string,
                 vol.Optional("webhook_path"): cv.string,
                 vol.Optional("data"): dict,
+                vol.Optional("payload"): dict,
             }
         ),
     )

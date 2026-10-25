@@ -2,7 +2,7 @@
 
 **Home Assistant custom integration for [n8n](https://n8n.io)** — bidirectional workflow triggers and a practical subset of the n8n Public API as HA entities.
 
-> **Status:** Phase 1 MVP (**v0.2.0**). Config flow validates against the n8n Public API; workflows appear as switches/buttons; inbound n8n→HA webhooks fire bus events and an event entity.
+> **Status:** Phase 1 MVP (**v0.2.1**). Config flow validates against the n8n Public API; workflows appear as switches/buttons; inbound n8n→HA webhooks fire bus events and an event entity.
 
 ## What this is
 
@@ -74,10 +74,10 @@ The config flow validates with `GET /api/v1/workflows?limit=1`. On success, HA c
 | Platform / service | Role |
 |--------------------|------|
 | `switch.*` | Activate / deactivate workflow via Public API |
-| `button.*` | Trigger workflow (webhook path if present, else API `/execute`) |
+| `button.*` | Trigger workflow once (no payload fields — use the service below) |
 | `binary_sensor.*_api` | API reachability from the last poll |
 | `event.*_inbound_webhook` | Last inbound n8n→HA webhook |
-| `n8n.trigger_workflow` | Service: `workflow_id`, optional `data`, `webhook_path`, `config_entry_id` |
+| `n8n.trigger_workflow` | Service: `workflow_id`, optional `data`/`payload`, `webhook_path`, `config_entry_id` |
 | `n8n.refresh` | Force coordinator refresh |
 | `n8n.activate_workflow` / `n8n.deactivate_workflow` | Explicit activate/deactivate |
 
@@ -156,7 +156,11 @@ Buttons / `n8n.trigger_workflow` use this order:
 
 For reliable “run now” on older n8n versions, add a **Webhook** trigger to the workflow and activate it.
 
-Optional service payload:
+### Passing data (JSON body)
+
+HA **button** entities cannot take fields. To send a payload into n8n, call the **`n8n.trigger_workflow`** service (Developer Tools → Actions, or an automation). The object under `data` (or alias `payload`) is POSTed as `application/json` to the webhook or `/execute` body.
+
+**Developer Tools → Actions** example:
 
 ```yaml
 action: n8n.trigger_workflow
@@ -166,6 +170,8 @@ data:
     room: kitchen
     brightness: 80
 ```
+
+Same shape in an automation `actions:` block. `payload:` is accepted instead of `data:` if you prefer that name (omit `data` when using `payload`).
 
 ## Security notes
 

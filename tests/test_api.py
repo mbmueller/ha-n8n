@@ -89,6 +89,24 @@ async def test_activate_deactivate() -> None:
     activated = await client.async_activate_workflow("wf1")
     assert activated.active is True
     assert "activate" in session.request.call_args.args[1]
+    # n8n activate declares an optional JSON body and returns 415 for
+    # application/octet-stream — always send {} with application/json.
+    call_kwargs = session.request.call_args.kwargs
+    assert call_kwargs["json"] == {}
+    assert call_kwargs["headers"]["Content-Type"] == "application/json"
+    assert "octet-stream" not in call_kwargs["headers"].get("Content-Type", "")
+
+    session.request = MagicMock(
+        return_value=_mock_response(
+            200, {"id": "wf1", "name": "Morning Lights", "active": False}
+        )
+    )
+    deactivated = await client.async_deactivate_workflow("wf1")
+    assert deactivated.active is False
+    deact_kwargs = session.request.call_args.kwargs
+    assert "deactivate" in session.request.call_args.args[1]
+    assert deact_kwargs["json"] == {}
+    assert deact_kwargs["headers"]["Content-Type"] == "application/json"
 
 
 @pytest.mark.asyncio
@@ -105,7 +123,10 @@ async def test_trigger_prefers_webhook() -> None:
     url = session.request.call_args.args[1]
     assert url.endswith("/webhook/morning-lights")
     # Webhook calls must not send the API key.
-    assert "X-N8N-API-KEY" not in session.request.call_args.kwargs["headers"]
+    headers = session.request.call_args.kwargs["headers"]
+    assert "X-N8N-API-KEY" not in headers
+    assert headers["Content-Type"] == "application/json"
+    assert session.request.call_args.kwargs["json"] == {"room": "kitchen"}
 
 
 @pytest.mark.asyncio
@@ -123,9 +144,14 @@ async def test_trigger_falls_back_to_execute() -> None:
     session = MagicMock()
     session.request = MagicMock(side_effect=[detail, execute])
     client = _client_with_session(session)
-    result = await client.async_trigger_workflow("wf2")
+    result = await client.async_trigger_workflow(
+        "wf2", data={"source": "ha", "level": 2}
+    )
     assert result["mode"] == "api_execute"
     assert session.request.call_args.args[1].endswith("/workflows/wf2/execute")
+    exec_kwargs = session.request.call_args.kwargs
+    assert exec_kwargs["json"] == {"source": "ha", "level": 2}
+    assert exec_kwargs["headers"]["Content-Type"] == "application/json"
 
 
 @pytest.mark.asyncio

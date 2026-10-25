@@ -49,7 +49,7 @@
   "services": {
     "trigger_workflow": {
       "name": "Workflow auslösen",
-      "description": "Einen n8n-Workflow per Webhook oder Public-API-Execute auslösen.",
+      "description": "Einen n8n-Workflow per Webhook oder Public-API-Execute auslösen. Für einen JSON-Body diesen Dienst nutzen (nicht den Run-Button).",
       "fields": {
         "workflow_id": {
           "name": "Workflow-ID",
@@ -65,7 +65,11 @@
         },
         "data": {
           "name": "Daten",
-          "description": "Optionales JSON-Objekt als Request-Body."
+          "description": "Optionales JSON-Objekt als Webhook- oder API-Execute-Body. Bevorzugt gegenüber payload."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "Alias für data — gleicher JSON-Body, wenn data fehlt."
         }
       }
     },
