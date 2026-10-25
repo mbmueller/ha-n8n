@@ -1,6 +1,9 @@
 trigger_workflow:
   name: Trigger workflow
-  description: Trigger an n8n workflow via webhook or Public API execute.
+  description: >-
+    Trigger an n8n workflow via webhook or Public API execute.
+    Use this service (not the Run button) when you need to pass a JSON body —
+    button entities cannot accept fields.
   fields:
     workflow_id:
       name: Workflow ID
@@ -24,7 +27,18 @@ trigger_workflow:
         text:
     data:
       name: Data
-      description: Optional JSON object sent as the request body.
+      description: >-
+        Optional JSON object sent as the webhook or API execute request body
+        (Content-Type application/json). Prefer this field over payload.
+      required: false
+      example:
+        room: kitchen
+        brightness: 80
+      selector:
+        object:
+    payload:
+      name: Payload
+      description: Alias for data — same JSON body if data is omitted.
       required: false
       selector:
         object:

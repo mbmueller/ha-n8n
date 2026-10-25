@@ -49,7 +49,7 @@
   "services": {
     "trigger_workflow": {
       "name": "Trigger workflow",
-      "description": "Trigger an n8n workflow via webhook or Public API execute.",
+      "description": "Trigger an n8n workflow via webhook or Public API execute. Use this service (not the Run button) to pass a JSON body.",
       "fields": {
         "workflow_id": {
           "name": "Workflow ID",
@@ -65,7 +65,11 @@
         },
         "data": {
           "name": "Data",
-          "description": "Optional JSON object sent as the request body."
+          "description": "Optional JSON object sent as the webhook or API execute request body. Prefer this over payload."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "Alias for data — same JSON body if data is omitted."
         }
       }
     },
