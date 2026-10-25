@@ -31,12 +31,28 @@ def test_redacts_secrets() -> None:
                 "base_url": "http://n8n:5678",
                 "api_key": "super-secret-key",
                 "webhook_secret": "webhook-secret-value",
+                "webhook_secrets": [
+                    {
+                        "id": "sec_1",
+                        "label": "default",
+                        "secret": "webhook-secret-value",
+                        "created_at": "2026-01-01T00:00:00Z",
+                    }
+                ],
                 "webhook_id": "public-ish-id",
             }
-        }
+        },
+        "inbound_secret_count": 1,
+        "inbound_secret_metadata": [
+            {"id": "sec_1", "label": "default", "created_at": "2026-01-01T00:00:00Z"}
+        ],
     }
     redacted = async_redact_data(payload, TO_REDACT)
     assert redacted["entry"]["data"]["api_key"] == "**REDACTED**"
     assert redacted["entry"]["data"]["webhook_secret"] == "**REDACTED**"
+    assert redacted["entry"]["data"]["webhook_secrets"] == "**REDACTED**"
     assert redacted["entry"]["data"]["webhook_id"] == "public-ish-id"
     assert redacted["entry"]["data"]["base_url"] == "http://n8n:5678"
+    assert redacted["inbound_secret_count"] == 1
+    assert redacted["inbound_secret_metadata"][0]["id"] == "sec_1"
+    assert "secret" not in redacted["inbound_secret_metadata"][0]

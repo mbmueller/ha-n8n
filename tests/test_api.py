@@ -14,6 +14,7 @@ from custom_components.n8n.api import (
     N8nNotFoundError,
     workflow_from_api,
 )
+from custom_components.n8n.models import Workflow
 
 
 def _mock_response(
@@ -186,3 +187,66 @@ async def test_connection_error_maps() -> None:
     client = _client_with_session(session)
     with pytest.raises(N8nApiError, match="Connection error"):
         await client.async_validate()
+
+
+@pytest.mark.asyncio
+async def test_get_executions_metadata_only() -> None:
+    from custom_components.n8n.api import is_failed_status
+
+    payload = {
+        "data": [
+            {
+                "id": "e1",
+                "workflowId": "wf1",
+                "status": "success",
+                "startedAt": "2026-01-01T00:00:00.000Z",
+                "stoppedAt": "2026-01-01T00:00:01.000Z",
+                "mode": "webhook",
+            },
+            {
+                "id": "e2",
+                "workflowId": "wf1",
+                "status": "error",
+                "startedAt": "2026-01-01T01:00:00.000Z",
+                "mode": "manual",
+            },
+        ]
+    }
+    session = MagicMock()
+    session.request = MagicMock(return_value=_mock_response(200, payload))
+    client = _client_with_session(session)
+    executions = await client.async_get_executions(limit=50)
+    assert len(executions) == 2
+    assert executions[0].execution_id == "e1"
+    assert executions[0].status == "success"
+    assert is_failed_status(executions[1].status)
+    url = session.request.call_args.args[1]
+    assert "includeData=false" in url
+    assert "limit=50" in url
+
+
+def test_workflow_from_api_does_not_retain_nodes() -> None:
+    wf = workflow_from_api(
+        {
+            "id": "wf1",
+            "name": "With Nodes",
+            "active": True,
+            "nodes": [
+                {
+                    "type": "n8n-nodes-base.webhook",
+                    "parameters": {"path": "demo"},
+                    "credentials": {"httpHeaderAuth": {"id": "cred", "name": "x"}},
+                }
+            ],
+        }
+    )
+    assert wf.webhook_path == "demo"
+    assert not hasattr(wf, "nodes")
+    assert set(Workflow.__slots__) == {
+        "workflow_id",
+        "name",
+        "active",
+        "tags",
+        "updated_at",
+        "webhook_path",
+    }

@@ -15,21 +15,30 @@ from custom_components.n8n.webhook import (
     N8nWebhookView,
     inbound_webhook_path,
 )
+from custom_components.n8n.webhook_secrets import add_secret
 
 
 def test_inbound_path() -> None:
     assert inbound_webhook_path("abc") == "/api/n8n/webhook/abc"
 
 
+def _entry_with_secrets(*secret_values: str) -> MagicMock:
+    entry = MagicMock()
+    entry.entry_id = "entry1"
+    data: dict = {"webhook_id": "wid"}
+    for i, value in enumerate(secret_values):
+        data, record = add_secret(data, f"s{i}")
+        record["secret"] = value
+        data["webhook_secrets"][-1] = record
+    entry.data = data
+    return entry
+
+
 @pytest.mark.asyncio
 async def test_webhook_rejects_bad_secret() -> None:
     hass = MagicMock()
-    entry = MagicMock()
-    entry.entry_id = "entry1"
-    entry.data = {
-        "webhook_id": "wid",
-        "webhook_secret": "correct-secret",
-    }
+    hass.data = {}
+    entry = _entry_with_secrets("correct-secret")
     hass.config_entries.async_entries.return_value = [entry]
     view = N8nWebhookView(hass)
 
@@ -37,10 +46,7 @@ async def test_webhook_rejects_bad_secret() -> None:
         "POST",
         "/api/n8n/webhook/wid",
         headers={WEBHOOK_HEADER: "wrong"},
-        payload=b"{}",
     )
-    # make_mocked_request may not support payload the same on all versions
-    request._body = b"{}"  # noqa: SLF001
     request.read = _async_return(b"{}")
 
     response = await view.post(request, "wid")
@@ -49,14 +55,10 @@ async def test_webhook_rejects_bad_secret() -> None:
 
 
 @pytest.mark.asyncio
-async def test_webhook_accepts_valid_secret() -> None:
+async def test_webhook_accepts_any_active_secret() -> None:
     hass = MagicMock()
-    entry = MagicMock()
-    entry.entry_id = "entry1"
-    entry.data = {
-        "webhook_id": "wid",
-        "webhook_secret": "correct-secret",
-    }
+    hass.data = {}
+    entry = _entry_with_secrets("secret-a", "secret-b")
     hass.config_entries.async_entries.return_value = [entry]
     view = N8nWebhookView(hass)
 
@@ -66,7 +68,7 @@ async def test_webhook_accepts_valid_secret() -> None:
     request = make_mocked_request(
         "POST",
         "/api/n8n/webhook/wid",
-        headers={WEBHOOK_HEADER: "correct-secret"},
+        headers={WEBHOOK_HEADER: "secret-b"},
     )
     request.read = _async_return(body)
 
@@ -78,6 +80,37 @@ async def test_webhook_accepts_valid_secret() -> None:
     assert event_data["event_type"] == "motion_cleared"
     assert event_data["message"] == "ok"
     assert event_data["data"]["room"] == "hall"
+    assert event_data["secret_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_webhook_accepts_legacy_migrated_shape() -> None:
+    """Entries still carrying only webhook_secrets list work."""
+    hass = MagicMock()
+    hass.data = {}
+    entry = MagicMock()
+    entry.entry_id = "entry1"
+    entry.data = {
+        "webhook_id": "wid",
+        "webhook_secrets": [
+            {
+                "id": "sec_x",
+                "label": "default",
+                "secret": "correct-secret",
+                "created_at": "2026-01-01T00:00:00+00:00",
+            }
+        ],
+    }
+    hass.config_entries.async_entries.return_value = [entry]
+    view = N8nWebhookView(hass)
+    request = make_mocked_request(
+        "POST",
+        "/api/n8n/webhook/wid",
+        headers={WEBHOOK_HEADER: "correct-secret"},
+    )
+    request.read = _async_return(b"{}")
+    response = await view.post(request, "wid")
+    assert response.status == 200
 
 
 @pytest.mark.asyncio

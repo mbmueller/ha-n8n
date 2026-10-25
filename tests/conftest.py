@@ -83,11 +83,23 @@ def _ensure_ha_stubs() -> None:
         def async_update_reload_and_abort(self, *args, **kwargs):
             return kwargs
 
+    class OptionsFlow:
+        @property
+        def config_entry(self):
+            return getattr(self, "_config_entry", None)
+
+        def async_create_entry(self, **kwargs):
+            return kwargs
+
+        def async_show_form(self, **kwargs):
+            return kwargs
+
     class ConfigFlowResult(dict):
         pass
 
     config_entries.ConfigEntry = ConfigEntry
     config_entries.ConfigFlow = ConfigFlow
+    config_entries.OptionsFlow = OptionsFlow
     config_entries.ConfigFlowResult = ConfigFlowResult
 
     const = _pkg("homeassistant.const")
@@ -96,8 +108,10 @@ def _ensure_ha_stubs() -> None:
         SWITCH="switch",
         BUTTON="button",
         BINARY_SENSOR="binary_sensor",
+        SENSOR="sensor",
         EVENT="event",
     )
+    # Also used via homeassistant.const.EntityCategory in platforms
     const.EntityCategory = types.SimpleNamespace(DIAGNOSTIC="diagnostic")
 
     core = _pkg("homeassistant.core")
@@ -202,7 +216,7 @@ def _ensure_ha_stubs() -> None:
     util.dt = dt
 
     # Platform stubs used only if imported by tests
-    for name in ("switch", "button", "binary_sensor", "event"):
+    for name in ("switch", "button", "binary_sensor", "sensor", "event"):
         mod = _pkg(f"homeassistant.components.{name}")
         if name == "switch":
             mod.SwitchEntity = type("SwitchEntity", (), {})
@@ -213,8 +227,52 @@ def _ensure_ha_stubs() -> None:
             mod.BinarySensorDeviceClass = types.SimpleNamespace(
                 CONNECTIVITY="connectivity"
             )
+        elif name == "sensor":
+
+            class SensorEntity:
+                pass
+
+            class SensorEntityDescription:
+                def __init__(self, **kwargs):
+                    self.__dict__.update(kwargs)
+
+            mod.SensorEntity = SensorEntity
+            mod.SensorEntityDescription = SensorEntityDescription
         elif name == "event":
             mod.EventEntity = type("EventEntity", (), {})
+
+    # EntityCategory is imported from homeassistant.const in platforms
+    if not hasattr(const, "EntityCategory"):
+        const.EntityCategory = types.SimpleNamespace(DIAGNOSTIC="diagnostic")
+
+    repairs_mod = _pkg("homeassistant.components.repairs")
+
+    class RepairsFlow:
+        def async_show_form(self, **kwargs):
+            return kwargs
+
+        def async_create_entry(self, **kwargs):
+            return kwargs
+
+        def async_abort(self, **kwargs):
+            return kwargs
+
+    class ConfirmRepairFlow(RepairsFlow):
+        pass
+
+    repairs_mod.RepairsFlow = RepairsFlow
+    repairs_mod.ConfirmRepairFlow = ConfirmRepairFlow
+
+    data_entry_flow = _pkg("homeassistant.data_entry_flow")
+    data_entry_flow.FlowResult = dict
+
+    issue_registry = _pkg("homeassistant.helpers.issue_registry")
+    issue_registry.async_create_issue = MagicMock()
+    issue_registry.async_delete_issue = MagicMock()
+    issue_registry.IssueSeverity = types.SimpleNamespace(
+        WARNING="warning", ERROR="error"
+    )
+    helpers.issue_registry = issue_registry
 
 
 _ensure_ha_stubs()

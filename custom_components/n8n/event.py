@@ -14,6 +14,7 @@ from .const import CONF_WEBHOOK_ID, DOMAIN
 from .coordinator import N8nDataUpdateCoordinator
 from .entity import N8nEntity
 from .webhook import SIGNAL_WEBHOOK_EVENT, inbound_webhook_path
+from .webhook_secrets import list_webhook_secrets
 
 
 async def async_setup_entry(
@@ -44,10 +45,11 @@ class N8nInboundEventEntity(N8nEntity, EventEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose the inbound path (never the shared secret)."""
+        """Expose the inbound path and secret count (never secret values)."""
         return {
             "webhook_path": self._webhook_path,
             "auth_header": "X-N8N-HA-Secret",
+            "secret_count": len(list_webhook_secrets(dict(self._entry.data))),
         }
 
     async def async_added_to_hass(self) -> None:

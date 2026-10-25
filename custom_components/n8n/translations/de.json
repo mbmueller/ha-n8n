@@ -34,6 +34,40 @@
       "reauth_successful": "Erneute Authentifizierung erfolgreich"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "n8n Optionen",
+        "description": "Abfrageintervall, Workflow-Filter (leere Allowlists = alle) und eingehende Webhook-Geheimnisse. Mehrere Geheimnisse können dieselbe Webhook-URL authentifizieren. Neu erzeugte Geheimnisse werden einmalig in einer Benachrichtigung gezeigt — bestehende Werte werden nie erneut angezeigt. Geheimnisse erscheinen nie in Entitätsattributen.",
+        "data": {
+          "scan_interval": "Abfrageintervall (Sekunden)",
+          "workflow_allowlist": "Workflow-ID-Allowlist",
+          "workflow_blocklist": "Workflow-ID-Blocklist",
+          "tag_allowlist": "Tag-Allowlist",
+          "tag_blocklist": "Tag-Blocklist",
+          "execution_history_limit": "Ausführungs-Historie (Fenster)",
+          "inbound_secret_action": "Aktion für eingehendes Geheimnis",
+          "inbound_secret_label": "Label für neues Geheimnis",
+          "inbound_secret_id": "Bestehende Geheimnis-ID"
+        },
+        "data_description": {
+          "scan_interval": "Wie oft n8n abgefragt wird (30–300 Sekunden). Standard 60.",
+          "workflow_allowlist": "Kommagetrennte Workflow-IDs. Leer = alle (außer Tag-Allowlist gesetzt).",
+          "workflow_blocklist": "Kommagetrennte Workflow-IDs zum Ausblenden.",
+          "tag_allowlist": "Kommagetrennte n8n-Tag-Namen (z. B. ha-exposed). Leer = kein Tag-Filter.",
+          "tag_blocklist": "Kommagetrennte Tags zum Ausschließen.",
+          "execution_history_limit": "Anzahl jüngster Ausführungen für Last-Run-Sensoren und Fehlerzähler (1–250).",
+          "inbound_secret_action": "none = unverändert; create = neues Geheimnis (einmalig anzeigen); revoke = ein Geheimnis per ID widerrufen; rotate = erzeugen + widerrufen (alle anderen ohne ID, sonst die gewählte ID).",
+          "inbound_secret_label": "Label für ein neu erzeugtes/rotiertes Geheimnis (z. B. kitchen-wf).",
+          "inbound_secret_id": "Geheimnis-ID für revoke/rotate. IDs/Labels in den Diagnosedaten (Werte redigiert)."
+        }
+      }
+    },
+    "error": {
+      "secret_id_required": "Wähle eine Geheimnis-ID zum Widerrufen",
+      "secret_revoke_failed": "Geheimnis konnte nicht widerrufen werden (unbekannte ID oder letztes verbleibendes Geheimnis)"
+    }
+  },
   "entity": {
     "binary_sensor": {
       "api": {
@@ -44,6 +78,20 @@
       "inbound_webhook": {
         "name": "Eingehender Webhook"
       }
+    },
+    "sensor": {
+      "failed_executions": {
+        "name": "Fehlgeschlagene Ausführungen"
+      },
+      "last_execution": {
+        "name": "Letzter Lauf"
+      }
+    }
+  },
+  "issues": {
+    "stale_inbound_webhook": {
+      "title": "n8n eingehender Webhook möglicherweise veraltet ({entry_title})",
+      "description": "Home Assistant hat mehrere eingehende n8n-Webhook-Anfragen abgelehnt, weil kein aktives Shared Secret passte. Aktualisiere X-N8N-HA-Secret in n8n, oder nutze **Problem beheben**, um zu rotieren (neues Geheimnis erzeugen, alte widerrufen, neuen Wert einmalig anzeigen)."
     }
   },
   "services": {
@@ -104,6 +152,56 @@
         "workflow_id": {
           "name": "Workflow-ID",
           "description": "n8n-Workflow-ID zum Deaktivieren."
+        },
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID."
+        }
+      }
+    },
+    "create_inbound_secret": {
+      "name": "Eingehendes Geheimnis erzeugen",
+      "description": "Neues Shared Secret für den eingehenden HA-Webhook erzeugen. Einmalig in einer Benachrichtigung gezeigt; bestehende Geheimnisse bleiben auf derselben URL gültig.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "Optionales Label zur späteren Identifikation."
+        },
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID."
+        }
+      }
+    },
+    "revoke_inbound_secret": {
+      "name": "Eingehendes Geheimnis widerrufen",
+      "description": "Ein eingehendes Webhook-Geheimnis per ID widerrufen. Mindestens ein Geheimnis muss bleiben.",
+      "fields": {
+        "secret_id": {
+          "name": "Geheimnis-ID",
+          "description": "ID des zu widerrufenden Geheimnisses."
+        },
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID."
+        }
+      }
+    },
+    "rotate_inbound_secret": {
+      "name": "Eingehendes Geheimnis rotieren",
+      "description": "Neues eingehendes Geheimnis erzeugen (einmalig anzeigen) und vorherige widerrufen.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "Optionales Label für das neue Geheimnis."
+        },
+        "revoke_secret_id": {
+          "name": "Geheimnis-ID widerrufen",
+          "description": "Optionale spezifische ID zum Widerrufen nach dem Erzeugen."
+        },
+        "revoke_all_others": {
+          "name": "Alle anderen widerrufen",
+          "description": "Wenn true, bleibt nur das neue Geheimnis gültig."
         },
         "config_entry_id": {
           "name": "Konfigurationseintrag",
