@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to n8n",
-        "description": "Enter the base URL of your self-hosted n8n instance and an API key. Connection validation will be added in a later release.",
+        "description": "Enter the base URL of your self-hosted n8n instance and an API key. The connection is validated against the n8n Public API.",
         "data": {
           "base_url": "n8n base URL",
           "api_key": "API key",
@@ -14,6 +14,13 @@
           "api_key": "Create a dedicated key in n8n Settings → API",
           "verify_ssl": "Disable only for trusted LAN self-signed certificates"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate n8n",
+        "description": "The n8n API key was rejected. Enter a new API key.",
+        "data": {
+          "api_key": "API key"
+        }
       }
     },
     "error": {
@@ -23,7 +30,82 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This n8n instance is already configured"
+      "already_configured": "This n8n instance is already configured",
+      "reauth_successful": "Reauthentication successful"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "api": {
+        "name": "API"
+      }
+    },
+    "event": {
+      "inbound_webhook": {
+        "name": "Inbound webhook"
+      }
+    }
+  },
+  "services": {
+    "trigger_workflow": {
+      "name": "Trigger workflow",
+      "description": "Trigger an n8n workflow via webhook or Public API execute.",
+      "fields": {
+        "workflow_id": {
+          "name": "Workflow ID",
+          "description": "n8n workflow id to trigger."
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id when multiple n8n instances are configured."
+        },
+        "webhook_path": {
+          "name": "Webhook path",
+          "description": "Optional n8n production webhook path override."
+        },
+        "data": {
+          "name": "Data",
+          "description": "Optional JSON object sent as the request body."
+        }
+      }
+    },
+    "refresh": {
+      "name": "Refresh",
+      "description": "Force a refresh of workflows from n8n.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id. Refreshes all entries when omitted."
+        }
+      }
+    },
+    "activate_workflow": {
+      "name": "Activate workflow",
+      "description": "Activate (publish) an n8n workflow.",
+      "fields": {
+        "workflow_id": {
+          "name": "Workflow ID",
+          "description": "n8n workflow id to activate."
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id."
+        }
+      }
+    },
+    "deactivate_workflow": {
+      "name": "Deactivate workflow",
+      "description": "Deactivate (unpublish) an n8n workflow.",
+      "fields": {
+        "workflow_id": {
+          "name": "Workflow ID",
+          "description": "n8n workflow id to deactivate."
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id."
+        }
+      }
     }
   }
 }

@@ -1,0 +1,111 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mit n8n verbinden",
+        "description": "Gib die Basis-URL deiner selbst gehosteten n8n-Instanz und einen API-Schlüssel ein. Die Verbindung wird gegen die n8n Public API geprüft.",
+        "data": {
+          "base_url": "n8n Basis-URL",
+          "api_key": "API-Schlüssel",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "base_url": "Beispiel: http://n8n:5678 oder https://n8n.example.local",
+          "api_key": "Eigenen Schlüssel unter n8n Einstellungen → API anlegen",
+          "verify_ssl": "Nur bei vertrauenswürdigen selbstsignierten LAN-Zertifikaten deaktivieren"
+        }
+      },
+      "reauth_confirm": {
+        "title": "n8n erneut authentifizieren",
+        "description": "Der n8n API-Schlüssel wurde abgelehnt. Gib einen neuen API-Schlüssel ein.",
+        "data": {
+          "api_key": "API-Schlüssel"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Gib eine vollständige URL inklusive http:// oder https:// ein",
+      "cannot_connect": "Verbindung zu n8n fehlgeschlagen",
+      "invalid_auth": "Ungültiger API-Schlüssel",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "abort": {
+      "already_configured": "Diese n8n-Instanz ist bereits konfiguriert",
+      "reauth_successful": "Erneute Authentifizierung erfolgreich"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "api": {
+        "name": "API"
+      }
+    },
+    "event": {
+      "inbound_webhook": {
+        "name": "Eingehender Webhook"
+      }
+    }
+  },
+  "services": {
+    "trigger_workflow": {
+      "name": "Workflow auslösen",
+      "description": "Einen n8n-Workflow per Webhook oder Public-API-Execute auslösen.",
+      "fields": {
+        "workflow_id": {
+          "name": "Workflow-ID",
+          "description": "n8n-Workflow-ID zum Auslösen."
+        },
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID bei mehreren n8n-Instanzen."
+        },
+        "webhook_path": {
+          "name": "Webhook-Pfad",
+          "description": "Optionaler Override des n8n-Produktions-Webhook-Pfads."
+        },
+        "data": {
+          "name": "Daten",
+          "description": "Optionales JSON-Objekt als Request-Body."
+        }
+      }
+    },
+    "refresh": {
+      "name": "Aktualisieren",
+      "description": "Workflows von n8n neu laden.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID. Ohne Angabe werden alle Einträge aktualisiert."
+        }
+      }
+    },
+    "activate_workflow": {
+      "name": "Workflow aktivieren",
+      "description": "Einen n8n-Workflow aktivieren (veröffentlichen).",
+      "fields": {
+        "workflow_id": {
+          "name": "Workflow-ID",
+          "description": "n8n-Workflow-ID zum Aktivieren."
+        },
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID."
+        }
+      }
+    },
+    "deactivate_workflow": {
+      "name": "Workflow deaktivieren",
+      "description": "Einen n8n-Workflow deaktivieren.",
+      "fields": {
+        "workflow_id": {
+          "name": "Workflow-ID",
+          "description": "n8n-Workflow-ID zum Deaktivieren."
+        },
+        "config_entry_id": {
+          "name": "Konfigurationseintrag",
+          "description": "Optionale Eintrags-ID."
+        }
+      }
+    }
+  }
+}

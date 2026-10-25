@@ -1,0 +1,74 @@
+trigger_workflow:
+  name: Trigger workflow
+  description: Trigger an n8n workflow via webhook or Public API execute.
+  fields:
+    workflow_id:
+      name: Workflow ID
+      description: n8n workflow id to trigger.
+      required: true
+      example: "1"
+      selector:
+        text:
+    config_entry_id:
+      name: Config entry
+      description: Optional config entry id when multiple n8n instances are configured.
+      required: false
+      selector:
+        config_entry:
+          integration: n8n
+    webhook_path:
+      name: Webhook path
+      description: Optional n8n production webhook path override.
+      required: false
+      selector:
+        text:
+    data:
+      name: Data
+      description: Optional JSON object sent as the request body.
+      required: false
+      selector:
+        object:
+
+refresh:
+  name: Refresh
+  description: Force a refresh of workflows from n8n.
+  fields:
+    config_entry_id:
+      name: Config entry
+      description: Optional config entry id. Refreshes all entries when omitted.
+      required: false
+      selector:
+        config_entry:
+          integration: n8n
+
+activate_workflow:
+  name: Activate workflow
+  description: Activate (publish) an n8n workflow.
+  fields:
+    workflow_id:
+      name: Workflow ID
+      required: true
+      selector:
+        text:
+    config_entry_id:
+      name: Config entry
+      required: false
+      selector:
+        config_entry:
+          integration: n8n
+
+deactivate_workflow:
+  name: Deactivate workflow
+  description: Deactivate (unpublish) an n8n workflow.
+  fields:
+    workflow_id:
+      name: Workflow ID
+      required: true
+      selector:
+        text:
+    config_entry_id:
+      name: Config entry
+      required: false
+      selector:
+        config_entry:
+          integration: n8n
