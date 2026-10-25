@@ -16,14 +16,16 @@ Thanks for helping with the Home Assistant ↔ n8n bridge. This project is early
 3. Restart HA after Python changes; clear browser cache if the config flow UI looks stale.
 4. Use a **dedicated** n8n API key on a non-production instance when exercising live calls.
 
-Optional (once tests land):
+Unit tests (mocked aiohttp; no live credentials):
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
-pip install pytest pytest-homeassistant-custom-component
-pytest
+pip install pytest pytest-asyncio aiohttp voluptuous
+python3 -m pytest tests/ -v
 ```
+
+Full Home Assistant integration tests (optional) need HA Core ≥ 2026.9.3 and `pytest-homeassistant-custom-component`.
 
 ## Code style
 
