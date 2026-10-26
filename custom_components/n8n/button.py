@@ -64,7 +64,7 @@ class N8nTriggerButton(N8nEntity, ButtonEntity):
         self._workflow_id = workflow_id
         self._attr_unique_id = f"{coordinator.entry.entry_id}_run_{workflow_id}"
         workflow = self._workflow
-        name = workflow.name if workflow else workflow_id
+        name = workflow.name if workflow else f"Workflow {workflow_id}"
         self._attr_name = f"Run {name}"
 
     @property

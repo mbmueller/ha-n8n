@@ -34,6 +34,40 @@
       "reauth_successful": "Reauthentication successful"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "n8n options",
+        "description": "Poll interval, workflow filters (empty allowlists = expose all), and inbound webhook secrets. Multiple secrets can authenticate the same webhook URL. Newly created secrets are shown once in a notification — existing values are never re-displayed. Secrets never appear on entity attributes.",
+        "data": {
+          "scan_interval": "Poll interval (seconds)",
+          "workflow_allowlist": "Workflow ID allowlist",
+          "workflow_blocklist": "Workflow ID blocklist",
+          "tag_allowlist": "Tag allowlist",
+          "tag_blocklist": "Tag blocklist",
+          "execution_history_limit": "Execution history window",
+          "inbound_secret_action": "Inbound secret action",
+          "inbound_secret_label": "New secret label",
+          "inbound_secret_id": "Existing secret id"
+        },
+        "data_description": {
+          "scan_interval": "How often to poll n8n (30–300 seconds). Default 60.",
+          "workflow_allowlist": "Comma-separated workflow ids. Empty = all (unless a tag allowlist is set).",
+          "workflow_blocklist": "Comma-separated workflow ids to hide.",
+          "tag_allowlist": "Comma-separated n8n tag names (e.g. ha-exposed). Empty = no tag filter.",
+          "tag_blocklist": "Comma-separated tags to exclude.",
+          "execution_history_limit": "How many recent executions to fetch for last-run sensors and the failed count (1–250).",
+          "inbound_secret_action": "none = leave secrets unchanged; create = mint a new secret (shown once); revoke = disable one secret by id; rotate = create + revoke (all others if no id, or the selected id).",
+          "inbound_secret_label": "Label for a newly created/rotated secret (e.g. kitchen-wf).",
+          "inbound_secret_id": "Secret id for revoke/rotate. See diagnostics for id/label metadata (values redacted)."
+        }
+      }
+    },
+    "error": {
+      "secret_id_required": "Select a secret id to revoke",
+      "secret_revoke_failed": "Could not revoke that secret (unknown id or it is the last remaining secret)"
+    }
+  },
   "entity": {
     "binary_sensor": {
       "api": {
@@ -44,6 +78,20 @@
       "inbound_webhook": {
         "name": "Inbound webhook"
       }
+    },
+    "sensor": {
+      "failed_executions": {
+        "name": "Failed executions"
+      },
+      "last_execution": {
+        "name": "Last run"
+      }
+    }
+  },
+  "issues": {
+    "stale_inbound_webhook": {
+      "title": "n8n inbound webhook may be stale ({entry_title})",
+      "description": "Home Assistant rejected several inbound n8n webhook requests because no active shared secret matched. Update X-N8N-HA-Secret in n8n, or use **Fix issue** to rotate (create a new secret, revoke previous ones, and show the new value once)."
     }
   },
   "services": {
@@ -104,6 +152,56 @@
         "workflow_id": {
           "name": "Workflow ID",
           "description": "n8n workflow id to deactivate."
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id."
+        }
+      }
+    },
+    "create_inbound_secret": {
+      "name": "Create inbound secret",
+      "description": "Mint a new shared secret for the inbound HA webhook. Shown once in a notification; existing secrets keep working on the same URL.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "Optional label to identify this secret later."
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id."
+        }
+      }
+    },
+    "revoke_inbound_secret": {
+      "name": "Revoke inbound secret",
+      "description": "Revoke one inbound webhook secret by id. At least one secret must remain.",
+      "fields": {
+        "secret_id": {
+          "name": "Secret ID",
+          "description": "Id of the secret to revoke."
+        },
+        "config_entry_id": {
+          "name": "Config entry",
+          "description": "Optional config entry id."
+        }
+      }
+    },
+    "rotate_inbound_secret": {
+      "name": "Rotate inbound secret",
+      "description": "Create a new inbound secret (shown once) and revoke previous ones.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "Optional label for the new secret."
+        },
+        "revoke_secret_id": {
+          "name": "Revoke secret ID",
+          "description": "Optional specific secret id to revoke after creating the new one."
+        },
+        "revoke_all_others": {
+          "name": "Revoke all others",
+          "description": "When true, only the new secret remains valid."
         },
         "config_entry_id": {
           "name": "Config entry",

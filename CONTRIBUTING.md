@@ -21,9 +21,11 @@ Unit tests (mocked aiohttp; no live credentials):
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install pytest pytest-asyncio aiohttp voluptuous
+pip install -r requirements-dev.txt
 python3 -m pytest tests/ -v
 ```
+
+GitHub Actions runs the same `pytest` command on every pull request and on pushes to `main` (see `.github/workflows/ci.yml`). A failing test fails the PR check.
 
 Full Home Assistant integration tests (optional) need HA Core ≥ 2026.9.3 and `pytest-homeassistant-custom-component`.
 

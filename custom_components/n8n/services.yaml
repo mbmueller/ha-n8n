@@ -86,3 +86,73 @@ deactivate_workflow:
       selector:
         config_entry:
           integration: n8n
+
+create_inbound_secret:
+  name: Create inbound secret
+  description: >-
+    Mint a new shared secret for the inbound HA webhook. The new value is shown
+    once in a persistent notification. Existing secrets keep working on the same URL.
+  fields:
+    label:
+      name: Label
+      description: Optional label (e.g. kitchen-workflow) to identify this secret later.
+      required: false
+      selector:
+        text:
+    config_entry_id:
+      name: Config entry
+      required: false
+      selector:
+        config_entry:
+          integration: n8n
+
+revoke_inbound_secret:
+  name: Revoke inbound secret
+  description: >-
+    Revoke one inbound webhook secret by id. At least one secret must remain.
+    Secret ids are listed in diagnostics metadata (values are redacted).
+  fields:
+    secret_id:
+      name: Secret ID
+      description: Id of the secret to revoke (e.g. sec_…).
+      required: true
+      selector:
+        text:
+    config_entry_id:
+      name: Config entry
+      required: false
+      selector:
+        config_entry:
+          integration: n8n
+
+rotate_inbound_secret:
+  name: Rotate inbound secret
+  description: >-
+    Create a new inbound secret (shown once) and revoke previous ones.
+    By default all previous secrets are revoked; pass revoke_secret_id to revoke one,
+    or set revoke_all_others false to keep others valid.
+  fields:
+    label:
+      name: Label
+      description: Optional label for the new secret.
+      required: false
+      selector:
+        text:
+    revoke_secret_id:
+      name: Revoke secret ID
+      description: Optional specific secret id to revoke after creating the new one.
+      required: false
+      selector:
+        text:
+    revoke_all_others:
+      name: Revoke all others
+      description: When true (default if no revoke_secret_id), only the new secret remains valid.
+      required: false
+      selector:
+        boolean:
+    config_entry_id:
+      name: Config entry
+      required: false
+      selector:
+        config_entry:
+          integration: n8n

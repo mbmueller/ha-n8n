@@ -57,7 +57,8 @@ class N8nWorkflowSwitch(N8nEntity, SwitchEntity):
         self._workflow_id = workflow_id
         self._attr_unique_id = f"{coordinator.entry.entry_id}_wf_{workflow_id}"
         workflow = self._workflow
-        self._attr_name = workflow.name if workflow else workflow_id
+        # Entity name = workflow name under the n8n device (has_entity_name).
+        self._attr_name = workflow.name if workflow else f"Workflow {workflow_id}"
 
     @property
     def _workflow(self) -> Workflow | None:

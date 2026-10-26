@@ -8,14 +8,18 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_API_KEY, CONF_WEBHOOK_SECRET, DOMAIN
+from .const import CONF_API_KEY, CONF_WEBHOOK_SECRET, CONF_WEBHOOK_SECRETS, DOMAIN
 from .webhook import inbound_webhook_path
+from .webhook_secrets import list_webhook_secrets, secrets_public_metadata
 
 TO_REDACT = {
     CONF_API_KEY,
     CONF_WEBHOOK_SECRET,
+    CONF_WEBHOOK_SECRETS,
     "api_key",
     "webhook_secret",
+    "webhook_secrets",
+    "secret",
     "X-N8N-API-KEY",
     "X-N8N-HA-Secret",
     "authorization",
@@ -30,6 +34,9 @@ async def async_get_config_entry_diagnostics(
     stored = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     coordinator = stored.get("coordinator")
 
+    entry_data = dict(entry.data)
+    secret_count = len(list_webhook_secrets(entry_data))
+
     data: dict[str, Any] = {
         "entry": {
             "title": entry.title,
@@ -37,7 +44,7 @@ async def async_get_config_entry_diagnostics(
             "entry_id": entry.entry_id,
             "unique_id": entry.unique_id,
             "version": entry.version,
-            "data": dict(entry.data),
+            "data": entry_data,
             "options": dict(entry.options),
         },
         "inbound_webhook_path": inbound_webhook_path(
@@ -45,6 +52,8 @@ async def async_get_config_entry_diagnostics(
         )
         if entry.data.get("webhook_id")
         else None,
+        "inbound_secret_count": secret_count,
+        "inbound_secret_metadata": secrets_public_metadata(entry_data),
     }
 
     if coordinator is not None:

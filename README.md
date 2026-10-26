@@ -2,15 +2,15 @@
 
 **Home Assistant custom integration for [n8n](https://n8n.io)** — bidirectional workflow triggers and a practical subset of the n8n Public API as HA entities.
 
-> **Status:** Phase 1 MVP (**v0.2.1**). Config flow validates against the n8n Public API; workflows appear as switches/buttons; inbound n8n→HA webhooks fire bus events and an event entity.
+> **Status:** Phase 2 (**v0.3.0**). Options (poll interval, allow/block lists), execution sensors, webhook path auto-discovery, multi-secret inbound webhooks, reauth/repair.
 
 ## What this is
 
 A HACS-installable integration (`custom_components/n8n`) that lets you:
 
-1. **HA → n8n** — discover all workflows and activate / deactivate / trigger them from Home Assistant.
+1. **HA → n8n** — discover workflows and activate / deactivate / trigger them from Home Assistant.
 2. **n8n → HA** — POST from n8n to a secured HA webhook to fire `n8n_webhook_received` and update an event entity for automations.
-3. **API as entities** — expose safe metadata (workflow state, connectivity) without leaking secrets.
+3. **API as entities** — expose safe metadata (workflow state, last run, failures, connectivity) without leaking secrets.
 
 Target deployment: **self-hosted n8n** and **Home Assistant Core ≥ 2026.9.3** in separate Docker containers on the same Raspberry Pi (LAN / Docker network).
 
@@ -62,38 +62,49 @@ If containers are not on a shared user-defined network, use the host LAN IP or D
 The config flow validates with `GET /api/v1/workflows?limit=1`. On success, HA creates:
 
 - One **device** for the n8n instance
-- A **switch** per workflow (active / inactive)
-- A **button** per workflow (run once)
+- A **switch** / **button** / **last-run sensor** per exposed workflow
 - `binary_sensor` **API** connectivity (diagnostic)
+- `sensor` **Failed executions** (diagnostic aggregate)
 - An **event** entity for inbound webhooks
 
 **Do not** put API keys in YAML issues, screenshots, or git. HA stores config-entry secrets encrypted at rest.
+
+## Options (Phase 2)
+
+**Settings → Devices & services → n8n → Configure**:
+
+| Option | Default | Notes |
+|--------|---------|--------|
+| Poll interval | `60` s | Clamped 30–300 |
+| Workflow ID allowlist / blocklist | empty | Comma-separated ids |
+| Tag allowlist / blocklist | empty | e.g. `ha-exposed` |
+| Execution history window | `50` | Recent executions for last-run + failed count |
+| Inbound secret action | `none` | `create` / `revoke` / `rotate` (see below) |
+
+**Filtering:** empty allowlists expose **all** workflows (MVP default). If an id and/or tag allowlist is set, a workflow must match at least one allowlist. Blocklists always win.
+
+Changing options reloads the entry.
 
 ## Entities & services
 
 | Platform / service | Role |
 |--------------------|------|
 | `switch.*` | Activate / deactivate workflow via Public API |
-| `button.*` | Trigger workflow once (no payload fields — use the service below) |
+| `button.*` | Trigger workflow once (no payload fields — use the service) |
+| `sensor.*_last_run` | Last execution status per workflow (`success` / `error` / …) |
+| `sensor.*_failed_executions` | Failed count in the recent execution window |
 | `binary_sensor.*_api` | API reachability from the last poll |
 | `event.*_inbound_webhook` | Last inbound n8n→HA webhook |
 | `n8n.trigger_workflow` | Service: `workflow_id`, optional `data`/`payload`, `webhook_path`, `config_entry_id` |
 | `n8n.refresh` | Force coordinator refresh |
 | `n8n.activate_workflow` / `n8n.deactivate_workflow` | Explicit activate/deactivate |
-
-### MVP success path (from HA UI)
-
-1. Open the n8n device → turn a workflow **switch off** (deactivated in n8n).
-2. Press another workflow **Run** button (or call `n8n.trigger_workflow`).
-3. From n8n, POST to the inbound HA webhook (below) and confirm an automation / the event entity updates.
+| `n8n.create_inbound_secret` / `revoke_inbound_secret` / `rotate_inbound_secret` | Manage inbound webhook secrets |
 
 ## Inbound webhook (n8n → Home Assistant)
 
-Each config entry gets an unguessable webhook id and shared secret. On first setup HA shows a **persistent notification** with the full URL and `X-N8N-HA-Secret` value — copy them into n8n credentials, then dismiss the notice (it is only created once).
+Each config entry has **one** unguessable webhook URL/path. **Multiple named shared secrets** can authenticate that same endpoint (like multiple API keys). Any valid secret in `X-N8N-HA-Secret` is accepted (constant-time compare against the active set).
 
-The inbound **event** entity also exposes `webhook_path` and `auth_header` attributes (never the secret). Diagnostics include the path with secrets redacted.
-
-**URL path:**
+**URL path (shared by all secrets):**
 
 ```text
 POST /api/n8n/webhook/{webhook_id}
@@ -102,10 +113,36 @@ POST /api/n8n/webhook/{webhook_id}
 **Required header:**
 
 ```http
-X-N8N-HA-Secret: <webhook_secret from the setup notification>
+X-N8N-HA-Secret: <one active inbound secret>
 ```
 
-**Example body:**
+On first setup HA shows a **persistent notification** with the URL and the initial secret — copy it into n8n credentials, then dismiss. **Existing secrets are never re-displayed** (not on entities, not in diagnostics). To get a value again, **create** or **rotate** a secret (the new value is shown once).
+
+### Create a second secret (another n8n workflow)
+
+Without reinstalling or changing the URL:
+
+1. **Settings → Devices & services → n8n → Configure**
+2. Set **Inbound secret action** to `create`, set a **label** (e.g. `kitchen-wf`), submit.
+3. Open the new persistent notification, copy the secret into that workflow’s n8n credential.
+4. Keep using the **same** webhook URL; only the header value differs per workflow.
+
+Or via service:
+
+```yaml
+action: n8n.create_inbound_secret
+data:
+  label: kitchen-wf
+```
+
+### Revoke / rotate
+
+- **Revoke:** options action `revoke` + secret id, or `n8n.revoke_inbound_secret` with `secret_id`. The last remaining secret cannot be revoked.
+- **Rotate:** options action `rotate` (creates a new secret, shows it once, and by default revokes all previous secrets). Or `n8n.rotate_inbound_secret`. Pass `revoke_secret_id` to revoke one previous secret instead of all.
+
+After repeated auth failures HA may open a **repair** flow that rotates secrets the same way.
+
+### Example body
 
 ```json
 {
@@ -115,10 +152,7 @@ X-N8N-HA-Secret: <webhook_secret from the setup notification>
 }
 ```
 
-On success HA:
-
-1. Fires bus event `n8n_webhook_received` with `entry_id`, `event_type`, `message`, `data`, …
-2. Updates the inbound **event** entity (usable in the Automations UI).
+On success HA fires bus event `n8n_webhook_received` and updates the inbound **event** entity.
 
 ### Example: n8n HTTP Request node (same Docker network)
 
@@ -126,10 +160,8 @@ On success HA:
 |---------|--------|
 | Method | `POST` |
 | URL | `http://homeassistant:8123/api/n8n/webhook/YOUR_WEBHOOK_ID` |
-| Header | `X-N8N-HA-Secret` = your shared secret (store in n8n **Credentials**, not hard-coded) |
+| Header | `X-N8N-HA-Secret` = one active secret (store in n8n **Credentials**) |
 | Body | JSON as above |
-
-If HA is only on the host network, try `http://172.17.0.1:8123/...` or the Pi’s LAN IP from the n8n container.
 
 ### Example automation trigger (YAML)
 
@@ -145,22 +177,16 @@ actions:
       message: "{{ trigger.event.data.message }}"
 ```
 
-Or use the **Event entity** trigger on `event.n8n_*_inbound_webhook`.
-
 ## Triggering workflows from HA
 
 Buttons / `n8n.trigger_workflow` use this order:
 
-1. Known **Webhook** node production path (`POST {base_url}/webhook/{path}`), discovered from workflow nodes when available.
+1. Known **Webhook** node production path (`POST {base_url}/webhook/{path}`), auto-discovered from workflow JSON in coordinator memory (node graphs are **not** dumped into entity attributes).
 2. Else Public API **`POST /api/v1/workflows/{id}/execute`** (when your n8n build supports it).
-
-For reliable “run now” on older n8n versions, add a **Webhook** trigger to the workflow and activate it.
 
 ### Passing data (JSON body)
 
-HA **button** entities cannot take fields. To send a payload into n8n, call the **`n8n.trigger_workflow`** service (Developer Tools → Actions, or an automation). The object under `data` (or alias `payload`) is POSTed as `application/json` to the webhook or `/execute` body.
-
-**Developer Tools → Actions** example:
+HA **button** entities cannot take fields. Call **`n8n.trigger_workflow`** with `data` (or alias `payload`):
 
 ```yaml
 action: n8n.trigger_workflow
@@ -171,31 +197,39 @@ data:
     brightness: 80
 ```
 
-Same shape in an automation `actions:` block. `payload:` is accepted instead of `data:` if you prefer that name (omit `data` when using `payload`).
+## Migration notes (existing installs)
+
+Upgrading from Phase 1 (`≤0.2.x`) to **0.3.0**:
+
+- The single `webhook_secret` is migrated into a multi-secret list automatically; the same value keeps working — **no action required** for inbound webhooks.
+- All workflows remain exposed until you set allowlists in options.
+- New sensors (`last run`, `failed executions`) appear after reload/restart.
+- Poll interval defaults to 60s until changed in options.
+- Reauth still works when the API key is rejected (401/403).
 
 ## Security notes
 
-- API keys and webhook secrets must never appear in entity attributes, issue reports, or unredacted diagnostics.
+- API keys and webhook secrets must never appear in entity attributes, issue reports, or unredacted diagnostics (diagnostics may show **secret count** and id/label metadata only).
 - Prefer HTTPS for any non-localhost n8n URL.
-- A compromised HA backup can expose the n8n API key and inbound webhook secret — rotate both if that happens.
-- Inbound webhooks require the shared secret header; reject missing/invalid secrets with `401`.
-- Put the HA webhook secret in the n8n credential store when possible.
+- A compromised HA backup can expose n8n API keys and inbound secrets — rotate/revoke if that happens.
+- Inbound webhooks require a valid shared secret header; reject missing/invalid secrets with `401`.
 
 ## Diagnostics
 
-**Settings → Devices & services → n8n → Download diagnostics** returns redacted config (API key / webhook secret scrubbed), coordinator snapshot, and the inbound webhook **path** (not the secret).
+**Settings → Devices & services → n8n → Download diagnostics** returns redacted config, coordinator snapshot, inbound webhook **path**, and inbound secret **metadata** (id/label/created_at — values redacted).
 
 ## Roadmap (short)
 
 | Phase | Focus |
 |-------|--------|
 | **0** | HACS packaging, config-flow stub |
-| **1** (this release) | Live API client, coordinator, switches/buttons, inbound webhook + event entity, diagnostics, EN/DE strings |
-| **2+** | Options (poll interval, allowlists), execution sensors, webhook auto-discovery polish |
+| **1** | Live API client, switches/buttons, inbound webhook + event entity |
+| **2** (this release) | Options, execution sensors, webhook discovery, multi-secret inbound, reauth/repair |
+| **3+** | Credential metadata sensors, MQTT inbound, Core submission |
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Unit tests (`pytest`) run in GitHub Actions on every pull request and on pushes to `main`.
 
 ## License
 

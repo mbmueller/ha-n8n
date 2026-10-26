@@ -9,11 +9,14 @@ from urllib.parse import urljoin
 import aiohttp
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .models import Workflow
+from .models import ExecutionSummary, Workflow
 
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+# Statuses n8n Public API treats as failed / error outcomes.
+_FAILED_STATUSES = frozenset({"error", "crashed", "failed", "canceled", "cancelled"})
 
 
 class N8nApiError(Exception):
@@ -59,15 +62,50 @@ def _extract_webhook_path(nodes: Any) -> str | None:
 
 
 def workflow_from_api(payload: dict[str, Any]) -> Workflow:
-    """Map an n8n workflow JSON object to a Workflow dataclass."""
+    """Map an n8n workflow JSON object to a Workflow dataclass.
+
+    Node graphs are parsed only to discover webhook paths and are never
+    retained on the returned object.
+    """
+    nodes = payload.get("nodes")
+    webhook_path = _extract_webhook_path(nodes)
     return Workflow(
         workflow_id=str(payload["id"]),
         name=str(payload.get("name") or payload["id"]),
         active=bool(payload.get("active", False)),
         tags=_tag_names(payload.get("tags")),
         updated_at=payload.get("updatedAt"),
-        webhook_path=_extract_webhook_path(payload.get("nodes")),
+        webhook_path=webhook_path,
     )
+
+
+def execution_from_api(payload: dict[str, Any]) -> ExecutionSummary | None:
+    """Map an n8n execution list item to a safe summary (no run data)."""
+    execution_id = payload.get("id")
+    if execution_id is None:
+        return None
+    workflow_id = payload.get("workflowId")
+    if workflow_id is None and isinstance(payload.get("workflowData"), dict):
+        workflow_id = payload["workflowData"].get("id")
+    status = str(
+        payload.get("status")
+        or ("error" if payload.get("finished") and payload.get("stoppedAt") else "unknown")
+    )
+    return ExecutionSummary(
+        execution_id=str(execution_id),
+        workflow_id=str(workflow_id) if workflow_id is not None else None,
+        status=status.lower(),
+        started_at=payload.get("startedAt") or payload.get("createdAt"),
+        finished_at=payload.get("stoppedAt") or payload.get("finishedAt"),
+        mode=str(payload["mode"]) if payload.get("mode") is not None else None,
+    )
+
+
+def is_failed_status(status: str | None) -> bool:
+    """Return True if an execution status counts as a failure."""
+    if not status:
+        return False
+    return status.lower() in _FAILED_STATUSES
 
 
 class N8nApiClient:
@@ -249,6 +287,36 @@ class N8nApiClient:
             f"{self.api_root}/workflows/{workflow_id}/execute",
             json=data or {},
         )
+
+    async def async_get_executions(
+        self,
+        *,
+        workflow_id: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[ExecutionSummary]:
+        """List recent executions (metadata only; no run data fields)."""
+        params: list[str] = [f"limit={max(1, min(limit, 250))}"]
+        if workflow_id:
+            params.append(f"workflowId={workflow_id}")
+        if status:
+            params.append(f"status={status}")
+        # Exclude binary/execution data payloads from the Public API response.
+        params.append("includeData=false")
+
+        url = f"{self.api_root}/executions?{'&'.join(params)}"
+        payload = await self._request("GET", url)
+        if not isinstance(payload, dict):
+            return []
+
+        summaries: list[ExecutionSummary] = []
+        for item in payload.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+            summary = execution_from_api(item)
+            if summary is not None:
+                summaries.append(summary)
+        return summaries
 
     async def async_trigger_webhook(
         self,

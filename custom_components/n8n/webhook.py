@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import secrets
 from http import HTTPStatus
 from typing import Any
 
@@ -17,16 +16,23 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_WEBHOOK_ID,
-    CONF_WEBHOOK_SECRET,
     DOMAIN,
     EVENT_WEBHOOK_RECEIVED,
     MAX_WEBHOOK_PAYLOAD_BYTES,
+    WEBHOOK_AUTH_FAILURE_THRESHOLD,
     WEBHOOK_HEADER,
+)
+from .webhook_secrets import (
+    list_webhook_secrets,
+    secret_matches,
+    secrets_public_metadata,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 SIGNAL_WEBHOOK_EVENT = f"{DOMAIN}_webhook_event"
+
+_AUTH_FAILURES_KEY = "webhook_auth_failures"
 
 
 def inbound_webhook_path(webhook_id: str) -> str:
@@ -45,8 +51,71 @@ def inbound_webhook_url(hass: HomeAssistant, webhook_id: str) -> str:
     return path
 
 
+def reset_webhook_auth_failures(hass: HomeAssistant, entry_id: str) -> None:
+    """Clear auth-failure counters after a successful request or rotation."""
+    failures = hass.data.get(DOMAIN, {}).get(_AUTH_FAILURES_KEY)
+    if isinstance(failures, dict):
+        failures.pop(entry_id, None)
+
+
+def async_notify_new_inbound_secret(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    record: dict[str, str],
+    *,
+    rotated: bool = False,
+) -> bool:
+    """Show a newly created secret once in a dismissible persistent notification.
+
+    Existing secrets are never re-displayed — create or rotate to get a value.
+    """
+    webhook_id = entry.data.get(CONF_WEBHOOK_ID)
+    secret = record.get("secret")
+    if not webhook_id or not secret:
+        return False
+
+    path = inbound_webhook_path(str(webhook_id))
+    url = inbound_webhook_url(hass, str(webhook_id))
+    from homeassistant.components import persistent_notification
+
+    action = "Rotated" if rotated else "Created"
+    persistent_notification.async_create(
+        hass,
+        (
+            f"{action} inbound webhook secret **{record.get('label', 'default')}** "
+            f"(`{record.get('id')}`).\n\n"
+            f"Same URL for all secrets: `{url}` (path `{path}`).\n\n"
+            f"Header `{WEBHOOK_HEADER}` = `{secret}`\n\n"
+            "Copy this into n8n credentials now — **this value is shown only once**. "
+            "Existing secrets are not re-displayed; create or rotate to mint a new one. "
+            "Secrets never appear on entity attributes or diagnostics."
+        ),
+        title=f"n8n inbound webhook ({entry.title})",
+        notification_id=f"{DOMAIN}_webhook_{entry.entry_id}_{record.get('id', 'new')}",
+    )
+    return True
+
+
+def _record_auth_failure(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Count invalid-secret attempts and raise a repair issue when persistent."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    failures: dict[str, int] = domain_data.setdefault(_AUTH_FAILURES_KEY, {})
+    count = failures.get(entry.entry_id, 0) + 1
+    failures[entry.entry_id] = count
+    _LOGGER.warning(
+        "Rejected n8n webhook for entry %s (invalid secret, failure %s)",
+        entry.entry_id,
+        count,
+    )
+    if count < WEBHOOK_AUTH_FAILURE_THRESHOLD:
+        return
+    from .repairs import async_create_stale_webhook_issue
+
+    async_create_stale_webhook_issue(hass, entry)
+
+
 class N8nWebhookView(HomeAssistantView):
-    """Accept POSTs from n8n with a shared-secret header."""
+    """Accept POSTs from n8n with a shared-secret header (any active secret)."""
 
     name = "api:n8n:webhook"
     url = "/api/n8n/webhook/{webhook_id}"
@@ -61,16 +130,12 @@ class N8nWebhookView(HomeAssistantView):
         if entry is None:
             return web.Response(status=HTTPStatus.NOT_FOUND)
 
-        expected = entry.data.get(CONF_WEBHOOK_SECRET, "")
         provided = request.headers.get(WEBHOOK_HEADER, "")
-        if not expected or not secrets.compare_digest(
-            str(provided), str(expected)
-        ):
-            _LOGGER.warning(
-                "Rejected n8n webhook for entry %s (invalid secret)",
-                entry.entry_id,
-            )
+        if not secret_matches(str(provided), dict(entry.data)):
+            _record_auth_failure(self.hass, entry)
             return web.Response(status=HTTPStatus.UNAUTHORIZED)
+
+        reset_webhook_auth_failures(self.hass, entry.entry_id)
 
         try:
             raw = await request.read()
@@ -108,6 +173,7 @@ class N8nWebhookView(HomeAssistantView):
             "message": message,
             "data": data,
             "received_at": dt_util.utcnow().isoformat(),
+            "secret_count": len(list_webhook_secrets(dict(entry.data))),
         }
 
         self.hass.bus.async_fire(EVENT_WEBHOOK_RECEIVED, event_data)
@@ -141,3 +207,16 @@ def async_register_webhook_view(hass: HomeAssistant) -> None:
         return
     hass.http.register_view(N8nWebhookView(hass))
     domain_data["webhook_view_registered"] = True
+
+
+# Re-export for diagnostics / event entity convenience.
+__all__ = [
+    "N8nWebhookView",
+    "SIGNAL_WEBHOOK_EVENT",
+    "async_notify_new_inbound_secret",
+    "async_register_webhook_view",
+    "inbound_webhook_path",
+    "inbound_webhook_url",
+    "reset_webhook_auth_failures",
+    "secrets_public_metadata",
+]
