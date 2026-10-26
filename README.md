@@ -229,7 +229,7 @@ Upgrading from Phase 1 (`≤0.2.x`) to **0.3.0**:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Unit tests (`pytest`) run in GitHub Actions on every pull request and on pushes to `main`.
 
 ## License
 

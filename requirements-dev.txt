@@ -1,0 +1,5 @@
+# Unit-test dependencies (mocked aiohttp; no Home Assistant Core required).
+pytest>=8.0
+pytest-asyncio>=0.23
+aiohttp>=3.9
+voluptuous>=0.14
